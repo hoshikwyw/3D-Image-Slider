@@ -100,6 +100,109 @@ document.addEventListener('DOMContentLoaded', () => {
         line.curve = curve
         return line
     }
+
+    const path = [
+        createTextAnimationPath(10, 2),
+        createTextAnimationPath(3.5, 1),
+        createTextAnimationPath(-3.5, -1),
+        createTextAnimationPath(-10, -2)
+    ]
+    path.forEach((line) => lettersScene.add(line))
+
+    const textContainer = document.querySelector(".text-container")
+    const letterPositions = new Map()
+    path.forEach((line, index) => {
+        line.letterElements = Array.from({ length: 15 }, () => {
+            const el = document.createElement("div")
+            el.className = "letter"
+            el.textContent = ["W", "O", "R", "K"][index]
+            textContainer.appendChild(el)
+            letterPositions.set(el, {
+                current: { x: 0, y: 0 },
+                target: { x: 0, y: 0 }
+            })
+            return el
+        })
+    })
+
+    const lineSpeedMultipliers = [0.8, 1, 0.7, 0.9]
+    const updateTargetPositions = (scrollProgress = 0) => {
+        path.forEach((line, index) => {
+            line.letterElements.forEach((el, i) => {
+                const point = line.curve.getPoint(
+                    (i / 14 + scrollProgress * lineSpeedMultipliers[index]) % 1
+                )
+                const vector = point.clone().project(lettersCamera)
+                const positions = letterPositions.get(el)
+                positions.target = {
+                    x: (-vector.x * 0.5 + 0.5) * window.innerWidth,
+                    y: (-vector.y * 0.5 + 0.5) * window.innerHeight
+                }
+            })
+        })
+    }
+
+    const updateLettersPositions = () => {
+        letterPositions.forEach((positions, el) => {
+            const distX = positions.target.x - positions.current.x
+            if (Math.abs(distX) > window.innerWidth * 0.7) {
+                [positions.current.x, positions.current.y] = [positions.target.x, positions.target.y]
+            } else {
+                positions.current.x = lerp(
+                    positions.current.x,
+                    positions.target.x,
+                    0.07
+                )
+                positions.current.y = lerp(
+                    positions.current.y,
+                    positions.target.y,
+                    0.07
+                )
+            }
+            el.style.transform = `translate(-50%, -50%) translate3d(${positions.current.x}px, ${positions.current.y}px, 0px)`
+        })
+    }
+
+    const updateCardsPosition = () => {
+        const targetX = -moveDistance * (ScrollTrigger.getAll()[0]?.progress || 0)
+        currentXPosition = lerp(currentXPosition, targetX, 0.07)
+        gsap.set(cardsContainer, {
+            x: currentXPosition
+        })
+    }
+
+    const animate = () => {
+        updateLettersPositions()
+        updateCardsPosition()
+        lettersRenderer.render(lettersScene, lettersCamera)
+        requestAnimationFrame(animate)
+    }
+
+    ScrollTrigger.create({
+        trigger: ".work",
+        start: "top top",
+        end: "+=700%",
+        pin: true,
+        pinSpacing: true,
+        scrub: 1,
+        onUpdate: (self) => {
+            updateTargetPositions(self.progress)
+            drawGrid(self.progress)
+        }
+    })
+
+    drawGrid(0)
+    animate()
+    updateTargetPositions(0)
+
+    window.addEventListener("resize", () => {
+        resizeGridCanvas()
+        drawGrid(ScrollTrigger.getAll()[0]?.progress || 0)
+        lettersCamera.aspect = window.innerWidth / window.innerHeight
+        lettersCamera.updateProjectionMatrix()
+        lettersRenderer.setSize(window.innerWidth, window.innerHeight)
+        updateTargetPositions(ScrollTrigger.getAll()[0]?.progress || 0)
+    })
 })
 
 // 7:31
